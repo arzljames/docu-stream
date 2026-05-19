@@ -89,7 +89,7 @@ const authOrigins = new Set(
   Object.values(authUrl).map((url) => new URL(url).origin),
 );
 const ssoPopupFeatures =
-  "popup=yes,width=520,height=680,left=200,top=100,resizable=yes,scrollbars=yes";
+  "width=520,height=680,left=200,top=100,resizable=yes,scrollbars=yes";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -129,6 +129,14 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message.length > 0
     ? error.message
     : fallback;
+}
+
+function getBlockedPopupMessage() {
+  if (window.self !== window.top) {
+    return "Open this deployment in a full browser tab, then try signing in again. Embedded previews can block sign-in pop-ups.";
+  }
+
+  return "Allow pop-ups for this site, then try signing in again.";
 }
 
 function RouteComponent() {
@@ -181,17 +189,18 @@ function RouteComponent() {
 
     const preferredSso = authUrl[authType];
     const popup = window.open(
-      preferredSso,
+      "",
       `docustream-${authType}-sso`,
       ssoPopupFeatures,
     );
 
     if (!popup) {
       setActiveAuthType(null);
-      setSignInError("Allow pop-ups for this site, then try signing in again.");
+      setSignInError(getBlockedPopupMessage());
       return;
     }
 
+    popup.location.href = preferredSso;
     popup.focus();
     let settled = false;
     let tabCheckInterval = 0;
