@@ -204,7 +204,8 @@ function mapDocumentListItemToCard(
   variant: "documents" | "media",
 ): DocumentItem {
   const fileExtension = getFileExtension(item.data.file);
-  const mediaType = variant === "media" ? getMediaType(fileExtension) : undefined;
+  const mediaType =
+    variant === "media" ? getMediaType(fileExtension) : undefined;
 
   return {
     accent: item.data.sub_category === "RCA_Reports" ? "red" : "green",
@@ -431,7 +432,6 @@ function StandardDocumentCard({
             <IconCalendar className="size-3.5" stroke={1.7} />
             {document.date ?? "N/A"}
           </span>
-          <span>{document.size ?? "N/A"}</span>
         </div>
       </div>
     </article>

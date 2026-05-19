@@ -87,6 +87,7 @@ const authUrl = AUTH_URL;
 const authOrigins = new Set(
   Object.values(authUrl).map((url) => new URL(url).origin),
 );
+const authTabFeatures = "noopener=no";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -126,6 +127,10 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message.length > 0
     ? error.message
     : fallback;
+}
+
+function getBlockedAuthTabMessage() {
+  return "Allow pop-ups and redirects for this site, then try signing in again.";
 }
 
 function RouteComponent() {
@@ -246,13 +251,17 @@ function RouteComponent() {
       return;
     }
 
-    const authTab = window.open(authUrl[authType], "_blank");
+    event.preventDefault();
 
-    if (authTab) {
-      event.preventDefault();
-      authTabRef.current = authTab;
-      authTab.focus();
+    const authTab = window.open(authUrl[authType], "_blank", authTabFeatures);
+
+    if (!authTab) {
+      setSignInError(getBlockedAuthTabMessage());
+      return;
     }
+
+    authTabRef.current = authTab;
+    authTab.focus();
 
     handleSignIn(authType);
   }
@@ -314,8 +323,6 @@ function RouteComponent() {
             <a
               href={authUrl.google}
               onClick={(event) => handleSignInClick(event, "google")}
-              rel="opener"
-              target="_blank"
             >
               <span className="flex size-5 items-center justify-center">
                 <GoogleIcon />
@@ -334,8 +341,6 @@ function RouteComponent() {
             <a
               href={authUrl.azure}
               onClick={(event) => handleSignInClick(event, "azure")}
-              rel="opener"
-              target="_blank"
             >
               <span className="flex size-5 items-center justify-center">
                 <MicrosoftIcon />
@@ -354,8 +359,6 @@ function RouteComponent() {
             <a
               href={authUrl.github}
               onClick={(event) => handleSignInClick(event, "github")}
-              rel="opener"
-              target="_blank"
             >
               <span className="flex size-5 items-center justify-center text-gray-800">
                 <GitHubIcon />
