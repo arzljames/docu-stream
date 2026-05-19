@@ -88,8 +88,6 @@ const authUrl = AUTH_URL;
 const authOrigins = new Set(
   Object.values(authUrl).map((url) => new URL(url).origin),
 );
-const ssoPopupFeatures =
-  "width=520,height=680,left=200,top=100,resizable=yes,scrollbars=yes";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -129,14 +127,6 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message.length > 0
     ? error.message
     : fallback;
-}
-
-function getBlockedPopupMessage() {
-  if (window.self !== window.top) {
-    return "Open this deployment in a full browser tab, then try signing in again. Embedded previews can block sign-in pop-ups.";
-  }
-
-  return "Allow pop-ups for this site, then try signing in again.";
 }
 
 function RouteComponent() {
@@ -187,26 +177,9 @@ function RouteComponent() {
     setSignInError("");
     setActiveAuthType(authType);
 
-    const preferredSso = authUrl[authType];
-    const popup = window.open(
-      "",
-      `docustream-${authType}-sso`,
-      ssoPopupFeatures,
-    );
-
-    if (!popup) {
-      setActiveAuthType(null);
-      setSignInError(getBlockedPopupMessage());
-      return;
-    }
-
-    popup.location.href = preferredSso;
-    popup.focus();
     let settled = false;
-    let tabCheckInterval = 0;
 
     const cleanup = () => {
-      window.clearInterval(tabCheckInterval);
       window.removeEventListener("message", handleMessage);
       cleanupPopupRef.current = () => undefined;
     };
@@ -223,11 +196,7 @@ function RouteComponent() {
     };
 
     const handleMessage = async (event: MessageEvent) => {
-      if (
-        event.source !== popup ||
-        !authOrigins.has(event.origin) ||
-        settled
-      ) {
+      if (!authOrigins.has(event.origin) || settled) {
         return;
       }
 
@@ -244,7 +213,6 @@ function RouteComponent() {
 
       settled = true;
       cleanup();
-      popup.close();
 
       try {
         await login(token);
@@ -258,14 +226,20 @@ function RouteComponent() {
       }
     };
 
-    tabCheckInterval = window.setInterval(() => {
-      if (popup.closed) {
-        finishWithError("The sign-in window was closed before it finished.");
-      }
-    }, 500);
-
     window.addEventListener("message", handleMessage);
     cleanupPopupRef.current = cleanup;
+  }
+
+  function handleSignInClick(
+    event: React.MouseEvent<HTMLAnchorElement>,
+    authType: AuthType,
+  ) {
+    if (isSigningIn) {
+      event.preventDefault();
+      return;
+    }
+
+    handleSignIn(authType);
   }
 
   const displayedError = signInError || authError;
@@ -318,43 +292,63 @@ function RouteComponent() {
 
         <div className="flex flex-col gap-3">
           <Button
-            className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-            disabled={isSigningIn}
-            onClick={() => handleSignIn("google")}
-            type="button"
+            asChild
+            className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            aria-disabled={isSigningIn}
           >
-            <span className="flex size-5 items-center justify-center">
-              <GoogleIcon />
-            </span>
-            {activeAuthType === "google" ? "Signing in..." : "Continue with Google"}
+            <a
+              href={authUrl.google}
+              onClick={(event) => handleSignInClick(event, "google")}
+              rel="opener"
+              target="_blank"
+            >
+              <span className="flex size-5 items-center justify-center">
+                <GoogleIcon />
+              </span>
+              {activeAuthType === "google"
+                ? "Signing in..."
+                : "Continue with Google"}
+            </a>
           </Button>
 
           <Button
-            className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-            disabled={isSigningIn}
-            onClick={() => handleSignIn("azure")}
-            type="button"
+            asChild
+            className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            aria-disabled={isSigningIn}
           >
-            <span className="flex size-5 items-center justify-center">
-              <MicrosoftIcon />
-            </span>
-            {activeAuthType === "azure"
-              ? "Signing in..."
-              : "Continue with Microsoft"}
+            <a
+              href={authUrl.azure}
+              onClick={(event) => handleSignInClick(event, "azure")}
+              rel="opener"
+              target="_blank"
+            >
+              <span className="flex size-5 items-center justify-center">
+                <MicrosoftIcon />
+              </span>
+              {activeAuthType === "azure"
+                ? "Signing in..."
+                : "Continue with Microsoft"}
+            </a>
           </Button>
 
           <Button
-            className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-            disabled={isSigningIn}
-            onClick={() => handleSignIn("github")}
-            type="button"
+            asChild
+            className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            aria-disabled={isSigningIn}
           >
-            <span className="flex size-5 items-center justify-center text-gray-800">
-              <GitHubIcon />
-            </span>
-            {activeAuthType === "github"
-              ? "Signing in..."
-              : "Continue with GitHub"}
+            <a
+              href={authUrl.github}
+              onClick={(event) => handleSignInClick(event, "github")}
+              rel="opener"
+              target="_blank"
+            >
+              <span className="flex size-5 items-center justify-center text-gray-800">
+                <GitHubIcon />
+              </span>
+              {activeAuthType === "github"
+                ? "Signing in..."
+                : "Continue with GitHub"}
+            </a>
           </Button>
         </div>
 
