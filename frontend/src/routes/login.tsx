@@ -15,8 +15,7 @@ export const Route = createFileRoute("/login")({
         ? search.intent
         : undefined,
     redirectTo:
-      typeof search.redirectTo === "string" &&
-      isAppRoutePath(search.redirectTo)
+      typeof search.redirectTo === "string" && isAppRoutePath(search.redirectTo)
         ? search.redirectTo
         : undefined,
   }),
@@ -141,6 +140,7 @@ function RouteComponent() {
   const [signInError, setSignInError] = useState("");
   const [activeAuthType, setActiveAuthType] = useState<AuthType | null>(null);
   const cleanupPopupRef = useRef<() => void>(() => undefined);
+  const authTabRef = useRef<Window | null>(null);
 
   const {
     authError,
@@ -181,6 +181,7 @@ function RouteComponent() {
 
     const cleanup = () => {
       window.removeEventListener("message", handleMessage);
+      authTabRef.current = null;
       cleanupPopupRef.current = () => undefined;
     };
 
@@ -200,6 +201,10 @@ function RouteComponent() {
         return;
       }
 
+      if (authTabRef.current && event.source !== authTabRef.current) {
+        return;
+      }
+
       const token = getAuthMessageToken(event.data);
       const status = getAuthMessageStatus(event.data);
 
@@ -212,10 +217,12 @@ function RouteComponent() {
       }
 
       settled = true;
+      const authTab = authTabRef.current;
       cleanup();
 
       try {
         await login(token);
+        authTab?.close();
         setActiveAuthType(null);
         void navigate({ replace: true, to: redirectTo });
       } catch (error) {
@@ -237,6 +244,14 @@ function RouteComponent() {
     if (isSigningIn) {
       event.preventDefault();
       return;
+    }
+
+    const authTab = window.open(authUrl[authType], "_blank");
+
+    if (authTab) {
+      event.preventDefault();
+      authTabRef.current = authTab;
+      authTab.focus();
     }
 
     handleSignIn(authType);
@@ -293,7 +308,7 @@ function RouteComponent() {
         <div className="flex flex-col gap-3">
           <Button
             asChild
-            className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100! aria-disabled:pointer-events-none aria-disabled:opacity-50"
             aria-disabled={isSigningIn}
           >
             <a
@@ -313,7 +328,7 @@ function RouteComponent() {
 
           <Button
             asChild
-            className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100! aria-disabled:pointer-events-none aria-disabled:opacity-50"
             aria-disabled={isSigningIn}
           >
             <a
@@ -333,7 +348,7 @@ function RouteComponent() {
 
           <Button
             asChild
-            className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100! aria-disabled:pointer-events-none aria-disabled:opacity-50"
             aria-disabled={isSigningIn}
           >
             <a

@@ -2,6 +2,10 @@ import express from "express";
 import multer from "multer";
 import { loadLocalEnv } from "./env.js";
 import {
+  logoutSession,
+  resolveAuthenticatedSession,
+} from "./auth-service.js";
+import {
   createDocumentItem,
   getErrorMessage,
   HttpError,
@@ -21,6 +25,29 @@ app.use(express.json({ limit: "1mb" }));
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "docu-stream-backend" });
+});
+
+app.post("/api/auth/session", async (req, res) => {
+  try {
+    const data = await resolveAuthenticatedSession({
+      authorization: req.get("Authorization"),
+    });
+
+    res.json({ data });
+  } catch (error) {
+    console.error("[auth-session]", getErrorMessage(error));
+    res.status(error instanceof HttpError ? error.status : 502).json({
+      message: getErrorMessage(error, "Sign in failed."),
+    });
+  }
+});
+
+app.post("/api/auth/logout", async (req, res) => {
+  await logoutSession({
+    authorization: req.get("Authorization"),
+  });
+
+  res.status(204).end();
 });
 
 app.post("/api/media/upload", upload.single("file"), async (req, res) => {

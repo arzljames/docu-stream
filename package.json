@@ -9,7 +9,7 @@
     "dev:backend": "node --watch backend/src/server.js",
     "build": "npm run build:frontend && npm run build:backend",
     "build:frontend": "tsc -b frontend/tsconfig.json && vite build --config frontend/vite.config.ts",
-    "build:backend": "node --check backend/src/env.js && node --check backend/src/app.js && node --check backend/src/server.js && node --check backend/src/upload-service.js && node --check backend/src/report-service.js && node --check api/upload.js && node --check api/health.js && node --check api/media/upload.js && node --check api/content/items.js && node --check api/reports/monthly-release.js && node --check api/reports/monthly-release/coda.js",
+    "build:backend": "node --check backend/src/env.js && node --check backend/src/auth-service.js && node --check backend/src/app.js && node --check backend/src/server.js && node --check backend/src/upload-service.js && node --check backend/src/report-service.js && node --check api/upload.js && node --check api/health.js && node --check api/auth/session.js && node --check api/auth/logout.js && node --check api/media/upload.js && node --check api/content/items.js && node --check api/reports/monthly-release.js && node --check api/reports/monthly-release/coda.js",
     "lint": "eslint frontend",
     "preview": "vite preview --config frontend/vite.config.ts"
   },
