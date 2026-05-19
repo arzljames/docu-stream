@@ -88,6 +88,14 @@ const authOrigins = new Set(
   Object.values(authUrl).map((url) => new URL(url).origin),
 );
 
+function getAuthTabTarget(authType: AuthType) {
+  return `docustream-${authType}-sso`;
+}
+
+function getMessageSourceWindow(source: MessageEventSource | null) {
+  return source && "closed" in source ? (source as Window) : null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -126,10 +134,6 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message.length > 0
     ? error.message
     : fallback;
-}
-
-function getBlockedAuthTabMessage() {
-  return "Allow pop-ups and redirects for this site, then try signing in again.";
 }
 
 function RouteComponent() {
@@ -205,7 +209,13 @@ function RouteComponent() {
         return;
       }
 
-      if (authTabRef.current && event.source !== authTabRef.current) {
+      const sourceWindow = getMessageSourceWindow(event.source);
+
+      if (
+        authTabRef.current &&
+        sourceWindow &&
+        sourceWindow !== authTabRef.current
+      ) {
         return;
       }
 
@@ -221,7 +231,7 @@ function RouteComponent() {
       }
 
       settled = true;
-      const authTab = authTabRef.current;
+      const authTab = authTabRef.current ?? sourceWindow;
       cleanup();
       authTab?.close();
 
@@ -250,19 +260,15 @@ function RouteComponent() {
       return;
     }
 
-    event.preventDefault();
-
-    const authTab = window.open(authUrl[authType], "_blank");
-
-    if (!authTab) {
-      setSignInError(getBlockedAuthTabMessage());
-      return;
-    }
-
-    authTabRef.current = authTab;
-    authTab.focus();
-
     handleSignIn(authType);
+
+    const authTab = window.open(authUrl[authType], getAuthTabTarget(authType));
+
+    if (authTab) {
+      event.preventDefault();
+      authTabRef.current = authTab;
+      authTab.focus();
+    }
   }
 
   const displayedError = signInError || authError;
@@ -322,6 +328,8 @@ function RouteComponent() {
             <a
               href={authUrl.google}
               onClick={(event) => handleSignInClick(event, "google")}
+              rel="opener"
+              target={getAuthTabTarget("google")}
             >
               <span className="flex size-5 items-center justify-center">
                 <GoogleIcon />
@@ -340,6 +348,8 @@ function RouteComponent() {
             <a
               href={authUrl.azure}
               onClick={(event) => handleSignInClick(event, "azure")}
+              rel="opener"
+              target={getAuthTabTarget("azure")}
             >
               <span className="flex size-5 items-center justify-center">
                 <MicrosoftIcon />
@@ -358,6 +368,8 @@ function RouteComponent() {
             <a
               href={authUrl.github}
               onClick={(event) => handleSignInClick(event, "github")}
+              rel="opener"
+              target={getAuthTabTarget("github")}
             >
               <span className="flex size-5 items-center justify-center text-gray-800">
                 <GitHubIcon />
