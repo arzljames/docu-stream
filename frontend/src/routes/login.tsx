@@ -87,7 +87,6 @@ const authUrl = AUTH_URL;
 const authOrigins = new Set(
   Object.values(authUrl).map((url) => new URL(url).origin),
 );
-const authTabFeatures = "noopener=no";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -224,10 +223,10 @@ function RouteComponent() {
       settled = true;
       const authTab = authTabRef.current;
       cleanup();
+      authTab?.close();
 
       try {
         await login(token);
-        authTab?.close();
         setActiveAuthType(null);
         void navigate({ replace: true, to: redirectTo });
       } catch (error) {
@@ -253,7 +252,7 @@ function RouteComponent() {
 
     event.preventDefault();
 
-    const authTab = window.open(authUrl[authType], "_blank", authTabFeatures);
+    const authTab = window.open(authUrl[authType], "_blank");
 
     if (!authTab) {
       setSignInError(getBlockedAuthTabMessage());
