@@ -7,11 +7,16 @@ const DEFAULT_CODA_RELEASE_NOTES_PAGE = "Release Notes";
 const DOCUMENT_LIST_ENDPOINT =
   "https://17vd2mpt-dev.webengine.zesty.io/datasets/document_list.json";
 const DOCUMENT_FETCH_LIMIT = 100;
-const CATEGORY_ORDER = ["Mobile", "Frontend", "Backend"];
+const CATEGORY_ORDER = [
+  { value: "Mobile", label: "📱 Mobile" },
+  { value: "Frontend", label: "🖥️ Frontend" },
+  { value: "Backend", label: "📊 Backend" },
+];
 const SUBCATEGORY_ORDER = ["Project Documentation", "RCA_Reports", "Media"];
 
 function parseReportMonth(month) {
-  const match = typeof month === "string" ? month.match(/^(\d{4})-(\d{2})$/) : null;
+  const match =
+    typeof month === "string" ? month.match(/^(\d{4})-(\d{2})$/) : null;
 
   if (!match) {
     throw new HttpError("Choose a valid report month.", 400);
@@ -45,7 +50,8 @@ function isItemInMonth(item, monthKey) {
 }
 
 function getFileExtension(filePath) {
-  const cleanPath = typeof filePath === "string" ? filePath.split(/[?#]/)[0] : "";
+  const cleanPath =
+    typeof filePath === "string" ? filePath.split(/[?#]/)[0] : "";
   const fileName = cleanPath.split("/").pop() ?? "";
   const extension = fileName.match(/\.([a-z0-9]+)$/i)?.[1];
 
@@ -144,7 +150,7 @@ function normalizeDocument(item) {
 function groupDocuments(documents) {
   return CATEGORY_ORDER.map((category) => {
     const categoryDocuments = documents.filter(
-      (document) => document.category === category,
+      (document) => document.category === category.value,
     );
     const subcategories = SUBCATEGORY_ORDER.map((subCategory) => {
       const items = categoryDocuments.filter(
@@ -160,7 +166,8 @@ function groupDocuments(documents) {
     }).filter((item) => item.total > 0);
 
     return {
-      category,
+      category: category.value,
+      categoryLabel: category.label,
       documents: categoryDocuments,
       subcategories,
       total: categoryDocuments.length,
@@ -195,7 +202,7 @@ function renderReportHtml(report) {
   const categorySummary = report.categories
     .map(
       (category) =>
-        `<li><strong>${category.category}:</strong> ${category.total}</li>`,
+        `<li><strong>${escapeHtml(category.categoryLabel)}:</strong> ${category.total}</li>`,
     )
     .join("");
   const categorySections = report.categories
@@ -205,7 +212,9 @@ function renderReportHtml(report) {
           ? category.subcategories
               .map(
                 (subcategory) => `
-                  <h4>${escapeHtml(subcategory.label)} (${subcategory.total})</h4>
+                  <span style="font-weight:bold;">
+                    ${escapeHtml(subcategory.label)} (${subcategory.total})
+                  </span>
                   <ul>${renderDocumentList(subcategory.documents)}</ul>
                 `,
               )
@@ -213,7 +222,7 @@ function renderReportHtml(report) {
           : "<p>No documents uploaded for this category.</p>";
 
       return `
-        <h3>${escapeHtml(category.category)} (${category.total})</h3>
+        <h3>${escapeHtml(category.categoryLabel)} (${category.total})</h3>
         ${subcategorySections}
       `;
     })
@@ -260,7 +269,10 @@ function getCodaConfig() {
   const token = process.env.CODA_API_TOKEN;
 
   if (!token) {
-    throw new HttpError("Missing Coda environment variable: CODA_API_TOKEN.", 501);
+    throw new HttpError(
+      "Missing Coda environment variable: CODA_API_TOKEN.",
+      501,
+    );
   }
 
   return {

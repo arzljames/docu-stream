@@ -23,6 +23,7 @@ export type ReleaseReportSubcategory = {
 
 export type ReleaseReportCategory = {
   category: ReleaseReportDocument["category"];
+  categoryLabel: string;
   documents: ReleaseReportDocument[];
   subcategories: ReleaseReportSubcategory[];
   total: number;

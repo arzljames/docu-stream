@@ -247,7 +247,7 @@ function ReportPreview({
           >
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold text-slate-950">
-                {category.category}
+                {category.categoryLabel}
               </h3>
               <span className="rounded-full bg-[#eceafe] px-2 py-0.5 text-xs font-semibold text-[#4f46e5]">
                 {category.total}
