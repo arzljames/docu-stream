@@ -94,8 +94,8 @@ export function CategoryLandingPage({
   const documentCount = data?._meta.totalItems ?? documents.length;
 
   return (
-    <section className="min-h-full w-full bg-[#f8fafc] px-6 py-9 text-slate-950 md:px-14">
-      <div className="mx-auto w-full max-w-375">
+    <section className="min-h-full w-full bg-[#f8fafc] px-6 py-9 text-slate-950 md:px-14 pb-20">
+      <div className="mx-auto w-full max-w-375 pb-6">
         <div className="flex items-start gap-4">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#eceafe] text-[#4f46e5]">
             <Icon className="size-5" stroke={2} />
