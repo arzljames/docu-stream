@@ -150,6 +150,35 @@ function getRouteDefaults(pathname: string) {
   };
 }
 
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function getDefaultDateCreatedInputValue() {
+  const date = new Date();
+
+  return [
+    `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(
+      date.getDate(),
+    )}`,
+    `${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`,
+  ].join("T");
+}
+
+function formatDateCreatedPayloadValue(value: string) {
+  const match = value.match(
+    /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/,
+  );
+
+  if (!match) {
+    return "";
+  }
+
+  const [, date, hour, minute, second = "00"] = match;
+
+  return `${date} ${hour}:${minute}:${second}`;
+}
+
 function getErrorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
     const responseMessage = error.response?.data?.message;
@@ -241,6 +270,9 @@ export function UploadDocumentModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [dateCreated, setDateCreated] = useState(
+    getDefaultDateCreatedInputValue,
+  );
   const [category, setCategory] = useState<CategoryValue | "">("");
   const [subcategory, setSubcategory] = useState<SubcategoryValue | "">("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -295,6 +327,7 @@ export function UploadDocumentModal({
     const defaults = getRouteDefaults(pathname);
     setTitle("");
     setDescription("");
+    setDateCreated(getDefaultDateCreatedInputValue());
     setCategory(defaults.category as CategoryValue | "");
     setSubcategory(defaults.subcategory as SubcategoryValue | "");
     setSelectedFile(null);
@@ -378,8 +411,12 @@ export function UploadDocumentModal({
       return;
     }
 
-    if (!title.trim() || !category || !subcategory) {
-      setUploadError("Complete the title, category, and subcategory fields.");
+    const documentDateCreated = formatDateCreatedPayloadValue(dateCreated);
+
+    if (!title.trim() || !category || !subcategory || !documentDateCreated) {
+      setUploadError(
+        "Complete the title, category, subcategory, and date created fields.",
+      );
       return;
     }
 
@@ -395,6 +432,7 @@ export function UploadDocumentModal({
     upload({
       category,
       description,
+      documentDateCreated,
       file: selectedFile,
       subCategory: subcategory,
       title,
@@ -545,6 +583,21 @@ export function UploadDocumentModal({
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="document-upload-date-created">
+                Date created
+              </Label>
+              <Input
+                className="h-9 border-slate-200 bg-white px-3 text-slate-950 shadow-sm focus-visible:border-[#8b83ee] focus-visible:ring-[#eceafe]"
+                id="document-upload-date-created"
+                onChange={(event) => setDateCreated(event.target.value)}
+                required
+                step={60}
+                type="datetime-local"
+                value={dateCreated}
+              />
             </div>
 
             <div className="space-y-2">

@@ -78,6 +78,36 @@ function getUserAuthorName(user) {
   return `${firstName} ${lastName}`.trim();
 }
 
+function isValidDateTimeString(value) {
+  const match =
+    typeof value === "string"
+      ? value.match(
+          /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/,
+        )
+      : null;
+
+  if (!match) {
+    return false;
+  }
+
+  const [, year, month, day, hour, minute, second] = match.map(Number);
+
+  if (hour > 23 || minute > 59 || second > 59) {
+    return false;
+  }
+
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second
+  );
+}
+
 function getVerifiedUserZuid(response) {
   const metaUserZuid = response?.meta?.userZuid;
 
@@ -152,6 +182,10 @@ function getContentItemFields(body) {
   const description =
     typeof data.description === "string" ? data.description.trim() : "";
   const category = typeof data.category === "string" ? data.category : "";
+  const documentDateCreated =
+    typeof data.document_date_created === "string"
+      ? data.document_date_created.trim()
+      : "";
   const subCategory =
     typeof data.sub_category === "string" ? data.sub_category : "";
   const fileZuid = typeof data.file === "string" ? data.file.trim() : "";
@@ -168,6 +202,10 @@ function getContentItemFields(body) {
     throw new HttpError("Choose a valid subcategory.");
   }
 
+  if (!isValidDateTimeString(documentDateCreated)) {
+    throw new HttpError("Date created must use YYYY-MM-DD HH:mm:ss format.");
+  }
+
   if (!fileZuid) {
     throw new HttpError("File ZUID must be a string.");
   }
@@ -175,6 +213,7 @@ function getContentItemFields(body) {
   return {
     category,
     description,
+    documentDateCreated,
     fileZuid,
     subCategory,
     title,
@@ -372,6 +411,7 @@ async function createContentItem(fields, fileZuid, config, authorName) {
       data: {
         category: fields.category,
         description: fields.description,
+        document_date_created: fields.documentDateCreated,
         file: fileZuid,
         sub_category: fields.subCategory,
         title: fields.title,

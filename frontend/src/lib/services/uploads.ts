@@ -3,6 +3,7 @@ import axiosInstance from "./axios-instance";
 export type UploadDocumentInput = {
   category: string;
   description: string;
+  documentDateCreated: string;
   file: File;
   subCategory: string;
   title: string;
@@ -37,6 +38,7 @@ async function createContentItem(input: UploadDocumentInput, fileZuid: string) {
     data: {
       category: input.category,
       description: input.description,
+      document_date_created: input.documentDateCreated,
       file: fileZuid,
       sub_category: input.subCategory,
       title: input.title,

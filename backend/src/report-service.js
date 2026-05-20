@@ -42,7 +42,12 @@ function parseReportMonth(month) {
 }
 
 function getItemDate(item) {
-  return item?.meta?.createdAt ?? item?.meta?.updatedAt ?? "";
+  return (
+    item?.data?.document_date_created ||
+    item?.meta?.createdAt ||
+    item?.meta?.updatedAt ||
+    ""
+  );
 }
 
 function isItemInMonth(item, monthKey) {

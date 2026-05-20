@@ -6,6 +6,7 @@ import {
   IconExternalLink,
   IconFileDescription,
   IconFileText,
+  IconVideo,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +21,7 @@ export type ViewerDocument = {
   description: string;
   fileExtension: string;
   fileUrl: string;
+  mediaType?: "Image" | "Video";
   subCategory?: string;
   tag: string;
   title: string;
@@ -47,11 +49,25 @@ const OFFICE_EXTENSION_ALIASES: Record<string, string> = {
   rtf: "doc",
 };
 
+const VIDEO_EXTENSIONS = new Set([
+  "avi",
+  "m4v",
+  "mov",
+  "mp4",
+  "mpeg",
+  "mpg",
+  "ogg",
+  "ogv",
+  "webm",
+]);
+
 export function DocumentViewerModal({
   document,
   onOpenChange,
   open,
 }: DocumentViewerModalProps) {
+  const shouldRenderVideoPlayer =
+    document?.mediaType === "Video" || isVideoFile(document?.fileExtension);
   const viewerDocuments = useMemo<IDocument[]>(() => {
     if (!document?.fileUrl) {
       return [];
@@ -115,38 +131,42 @@ export function DocumentViewerModal({
             </DialogHeader>
 
             <div className="min-h-0 bg-slate-100 p-2 sm:p-4">
-              <div className="h-full w-full overflow-hidden rounded-lg border border-slate-200 bg-white [&_#header-bar]:hidden [&_#msdoc-iframe]:h-full [&_#msdoc-iframe]:w-full [&_#msdoc-renderer]:h-full [&_#msdoc-renderer]:w-full [&_#pdf-renderer]:h-full [&_#pdf-renderer]:min-h-0 [&_#pdf-renderer]:overflow-x-auto [&_#pdf-renderer]:overflow-y-auto [&_#proxy-renderer]:flex [&_#proxy-renderer]:h-full [&_#proxy-renderer]:min-h-0 [&_#proxy-renderer]:w-full [&_#proxy-renderer]:flex-1 [&_#proxy-renderer]:flex-col [&_#proxy-renderer]:overflow-hidden [&_#react-doc-viewer]:h-full [&_#react-doc-viewer]:w-full [&_#react-doc-viewer]:bg-white [&_iframe]:min-h-full">
-                <DocViewer
-                  className="h-full"
-                  config={{
-                    header: {
-                      disableHeader: true,
-                    },
-                    noRenderer: {
-                      overrideComponent: () => (
-                        <UnsupportedDocumentPreview document={document} />
-                      ),
-                    },
-                    pdfVerticalScrollByDefault: true,
-                    pdfZoom: {
-                      defaultZoom: 1,
-                      zoomJump: 0.2,
-                    },
-                  }}
-                  documents={viewerDocuments}
-                  pluginRenderers={DocViewerRenderers}
-                  prefetchMethod="GET"
-                  style={{ height: "100%" }}
-                  theme={{
-                    primary: "#4f46e5",
-                    secondary: "#e2e8f0",
-                    tertiary: "#f8fafc",
-                    textPrimary: "#0f172a",
-                    textSecondary: "#475569",
-                    textTertiary: "#64748b",
-                  }}
-                />
-              </div>
+              {shouldRenderVideoPlayer ? (
+                <VideoDocumentPreview document={document} />
+              ) : (
+                <div className="h-full w-full overflow-hidden rounded-lg border border-slate-200 bg-white [&_#header-bar]:hidden [&_#msdoc-iframe]:h-full [&_#msdoc-iframe]:w-full [&_#msdoc-renderer]:h-full [&_#msdoc-renderer]:w-full [&_#pdf-renderer]:h-full [&_#pdf-renderer]:min-h-0 [&_#pdf-renderer]:overflow-x-auto [&_#pdf-renderer]:overflow-y-auto [&_#proxy-renderer]:flex [&_#proxy-renderer]:h-full [&_#proxy-renderer]:min-h-0 [&_#proxy-renderer]:w-full [&_#proxy-renderer]:flex-1 [&_#proxy-renderer]:flex-col [&_#proxy-renderer]:overflow-hidden [&_#react-doc-viewer]:h-full [&_#react-doc-viewer]:w-full [&_#react-doc-viewer]:bg-white [&_iframe]:min-h-full">
+                  <DocViewer
+                    className="h-full"
+                    config={{
+                      header: {
+                        disableHeader: true,
+                      },
+                      noRenderer: {
+                        overrideComponent: () => (
+                          <UnsupportedDocumentPreview document={document} />
+                        ),
+                      },
+                      pdfVerticalScrollByDefault: true,
+                      pdfZoom: {
+                        defaultZoom: 1,
+                        zoomJump: 0.2,
+                      },
+                    }}
+                    documents={viewerDocuments}
+                    pluginRenderers={DocViewerRenderers}
+                    prefetchMethod="GET"
+                    style={{ height: "100%" }}
+                    theme={{
+                      primary: "#4f46e5",
+                      secondary: "#e2e8f0",
+                      tertiary: "#f8fafc",
+                      textPrimary: "#0f172a",
+                      textSecondary: "#475569",
+                      textTertiary: "#64748b",
+                    }}
+                  />
+                </div>
+              )}
             </div>
           </>
         ) : null}
@@ -165,6 +185,30 @@ function getViewerFileType(fileExtension: string) {
   return OFFICE_EXTENSION_ALIASES[extension] ?? extension;
 }
 
+function isVideoFile(fileExtension?: string) {
+  return Boolean(
+    fileExtension && VIDEO_EXTENSIONS.has(fileExtension.toLowerCase()),
+  );
+}
+
+function VideoDocumentPreview({ document }: { document: ViewerDocument }) {
+  return (
+    <div className="flex h-full w-full min-h-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
+      <video
+        className="h-full w-full bg-slate-950 object-contain"
+        controls
+        playsInline
+        preload="metadata"
+        src={document.fileUrl}
+      >
+        <a href={document.fileUrl} rel="noreferrer" target="_blank">
+          Open video
+        </a>
+      </video>
+    </div>
+  );
+}
+
 function UnsupportedDocumentPreview({
   document,
 }: {
@@ -173,7 +217,9 @@ function UnsupportedDocumentPreview({
   return (
     <div className="flex h-full min-h-80 flex-col items-center justify-center px-6 text-center">
       <div className="flex size-14 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
-        {document.fileExtension === "FILE" ? (
+        {isVideoFile(document.fileExtension) ? (
+          <IconVideo className="size-7" stroke={1.8} />
+        ) : document.fileExtension === "FILE" ? (
           <IconFileDescription className="size-7" stroke={1.8} />
         ) : (
           <IconFileText className="size-7" stroke={1.8} />

@@ -69,7 +69,17 @@ type CategoryLandingPageProps = {
 };
 
 const IMAGE_EXTENSIONS = new Set(["avif", "gif", "jpeg", "jpg", "png", "webp"]);
-const VIDEO_EXTENSIONS = new Set(["avi", "mov", "mp4", "mpeg", "ogg", "webm"]);
+const VIDEO_EXTENSIONS = new Set([
+  "avi",
+  "m4v",
+  "mov",
+  "mp4",
+  "mpeg",
+  "mpg",
+  "ogg",
+  "ogv",
+  "webm",
+]);
 
 export function CategoryLandingPage({
   title,
@@ -210,18 +220,23 @@ function mapDocumentListItemToCard(
   return {
     accent: item.data.sub_category === "RCA_Reports" ? "red" : "green",
     author: item.data.author || undefined,
-    date: formatDateTime(item.meta.updatedAt ?? item.meta.createdAt),
+    date: formatDateTime(getDocumentDateValue(item)),
     description: item.data.description || "No description provided.",
     fileExtension: fileExtension || "FILE",
     fileUrl: item.data.file,
     id: item.meta.ZUID,
     mediaType,
-    previewUrl:
-      variant === "media" && mediaType === "Image" ? item.data.file : undefined,
+    previewUrl: variant === "media" ? item.data.file : undefined,
     subCategory: formatSubcategory(item.data.sub_category),
     tag: item.data.category,
     title: item.data.title || "Untitled document",
   };
+}
+
+function getDocumentDateValue(item: DocumentListItem) {
+  return (
+    item.data.document_date_created || item.meta.createdAt || item.meta.updatedAt
+  );
 }
 
 function getFileExtension(filePath: string) {
@@ -446,6 +461,7 @@ function MediaCard({
   onView: () => void;
 }) {
   const MediaIcon = document.mediaType === "Video" ? IconVideo : IconPhoto;
+  const isVideo = document.mediaType === "Video";
 
   return (
     <article
@@ -457,11 +473,22 @@ function MediaCard({
       tabIndex={0}
     >
       <div className="relative h-40 overflow-hidden bg-[#dfe7e6]">
-        <img
-          alt=""
-          className="h-full w-full object-cover"
-          src={document.previewUrl ?? mediaPreviewFallback}
-        />
+        {isVideo ? (
+          <video
+            aria-hidden="true"
+            className="pointer-events-none h-full w-full bg-slate-950 object-cover"
+            muted
+            playsInline
+            preload="metadata"
+            src={document.previewUrl}
+          />
+        ) : (
+          <img
+            alt=""
+            className="h-full w-full object-cover"
+            src={document.previewUrl ?? mediaPreviewFallback}
+          />
+        )}
         <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-[#1d4ed8] shadow-sm">
           <MediaIcon className="size-3.5" stroke={2} />
           {document.mediaType ?? "Image"}

@@ -30,6 +30,7 @@ export type DocumentListItem = {
     author?: string;
     category: DocumentCategory;
     description: string;
+    document_date_created?: string;
     file: string;
     sub_category: DocumentSubCategory;
     title: string;
