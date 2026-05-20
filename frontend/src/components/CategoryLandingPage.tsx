@@ -220,7 +220,7 @@ function mapDocumentListItemToCard(
   return {
     accent: item.data.sub_category === "RCA_Reports" ? "red" : "green",
     author: item.data.author || undefined,
-    date: formatDateTime(getDocumentDateValue(item)),
+    date: formatCardDate(getDocumentDateValue(item)),
     description: item.data.description || "No description provided.",
     fileExtension: fileExtension || "FILE",
     fileUrl: item.data.file,
@@ -261,12 +261,12 @@ function getMediaType(fileExtension: string) {
   return "Image";
 }
 
-function formatDateTime(value?: string) {
+function formatCardDate(value?: string) {
   if (!value) {
     return undefined;
   }
 
-  const date = new Date(value.replace(" ", "T"));
+  const date = parseDateValue(value);
 
   if (Number.isNaN(date.getTime())) {
     return value;
@@ -274,8 +274,19 @@ function formatDateTime(value?: string) {
 
   return new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
-    timeStyle: "short",
   }).format(date);
+}
+
+function parseDateValue(value: string) {
+  const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch.map(Number);
+
+    return new Date(year, month - 1, day);
+  }
+
+  return new Date(value.replace(" ", "T"));
 }
 
 function formatSubcategory(subCategory: string) {

@@ -157,26 +157,13 @@ function padDatePart(value: number) {
 function getDefaultDateCreatedInputValue() {
   const date = new Date();
 
-  return [
-    `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(
-      date.getDate(),
-    )}`,
-    `${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`,
-  ].join("T");
+  return `${date.getFullYear()}-${padDatePart(
+    date.getMonth() + 1,
+  )}-${padDatePart(date.getDate())}`;
 }
 
 function formatDateCreatedPayloadValue(value: string) {
-  const match = value.match(
-    /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/,
-  );
-
-  if (!match) {
-    return "";
-  }
-
-  const [, date, hour, minute, second = "00"] = match;
-
-  return `${date} ${hour}:${minute}:${second}`;
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
 }
 
 function getErrorMessage(error: unknown) {
@@ -594,8 +581,7 @@ export function UploadDocumentModal({
                 id="document-upload-date-created"
                 onChange={(event) => setDateCreated(event.target.value)}
                 required
-                step={60}
-                type="datetime-local"
+                type="date"
                 value={dateCreated}
               />
             </div>

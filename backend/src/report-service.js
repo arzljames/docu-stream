@@ -68,16 +68,26 @@ function formatDisplayDate(value) {
     return "No date";
   }
 
-  const date = new Date(value.replace(" ", "T"));
+  const date = parseDateValue(value);
 
   if (Number.isNaN(date.getTime())) {
     return value;
   }
 
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(date);
+}
+
+function parseDateValue(value) {
+  const dateOnlyMatch =
+    typeof value === "string" ? value.match(/^(\d{4})-(\d{2})-(\d{2})$/) : null;
+
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch.map(Number);
+
+    return new Date(year, month - 1, day);
+  }
+
+  return new Date(value.replace(" ", "T"));
 }
 
 function formatSubcategory(subCategory) {
