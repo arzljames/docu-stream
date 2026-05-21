@@ -5,6 +5,7 @@ import {
   IconCalendar,
   IconExternalLink,
   IconFileText,
+  IconFileAlert,
   IconFolder,
   IconPhoto,
   IconUpload,
@@ -235,7 +236,9 @@ function mapDocumentListItemToCard(
 
 function getDocumentDateValue(item: DocumentListItem) {
   return (
-    item.data.document_date_created || item.meta.createdAt || item.meta.updatedAt
+    item.data.document_date_created ||
+    item.meta.createdAt ||
+    item.meta.updatedAt
   );
 }
 
@@ -417,13 +420,21 @@ function StandardDocumentCard({
     >
       <div className="flex gap-3 pb-4">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-100">
-          <IconFileText
-            className={cn(
-              "size-4",
-              document.accent === "green" ? "text-emerald-500" : "text-red-500",
-            )}
-            stroke={1.8}
-          />
+          {document.accent === "green" ? (
+            <IconFileText
+              className={cn("size-4", "text-emerald-500")}
+              stroke={1.8}
+            />
+          ) : (
+            <IconFileAlert
+              className={cn(
+                "size-4",
+
+                "text-red-500",
+              )}
+              stroke={1.8}
+            />
+          )}
         </div>
         <div className="min-w-0">
           <h2 className="truncate text-sm font-semibold text-slate-950">
@@ -547,7 +558,7 @@ export function buildCategoryFolders(
       label: "RCA / Reports",
       description: "Incident writeups, analysis, and status reports.",
       to: `${basePath}/rca-reports` as CategoryRoute,
-      icon: IconFileText,
+      icon: IconFolder,
     },
     {
       label: "Media",

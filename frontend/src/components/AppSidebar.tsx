@@ -18,11 +18,11 @@ import {
   IconDeviceDesktop,
   IconDeviceMobile,
   IconFileDescription,
-  IconFileText,
-  IconFolder,
-  IconInfoCircle,
+  IconFileAlert,
   IconPhoto,
   IconServer2,
+  IconFileStack,
+  IconNote,
 } from "@tabler/icons-react";
 
 type RoutePath =
@@ -61,7 +61,7 @@ const CATEGORIES: SidebarCategory[] = [
   {
     label: "Monthly Release Notes",
     to: "/monthly-release-notes",
-    icon: IconFileText,
+    icon: IconNote,
   },
   {
     label: "Mobile",
@@ -71,9 +71,13 @@ const CATEGORIES: SidebarCategory[] = [
       {
         label: "Project Documentation",
         to: "/mobile/project-documentation",
-        icon: IconFolder,
+        icon: IconFileStack,
       },
-      { label: "RCA / Reports", to: "/mobile/rca-reports", icon: IconInfoCircle },
+      {
+        label: "RCA / Reports",
+        to: "/mobile/rca-reports",
+        icon: IconFileAlert,
+      },
       { label: "Media", to: "/mobile/media", icon: IconPhoto },
     ],
   },
@@ -85,12 +89,12 @@ const CATEGORIES: SidebarCategory[] = [
       {
         label: "Project Documentation",
         to: "/frontend/project-documentation",
-        icon: IconFolder,
+        icon: IconFileStack,
       },
       {
         label: "RCA / Reports",
         to: "/frontend/rca-reports",
-        icon: IconInfoCircle,
+        icon: IconFileAlert,
       },
       { label: "Media", to: "/frontend/media", icon: IconPhoto },
     ],
@@ -103,12 +107,12 @@ const CATEGORIES: SidebarCategory[] = [
       {
         label: "Project Documentation",
         to: "/backend/project-documentation",
-        icon: IconFolder,
+        icon: IconFileStack,
       },
       {
         label: "RCA / Reports",
         to: "/backend/rca-reports",
-        icon: IconInfoCircle,
+        icon: IconFileAlert,
       },
       { label: "Media", to: "/backend/media", icon: IconPhoto },
     ],
