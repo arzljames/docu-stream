@@ -633,7 +633,7 @@ async function postHtmlToCoda(html, config = getCodaConfig()) {
     {
       contentUpdate: {
         canvasContent: {
-          content: report.html,
+          content: html,
           format: "html",
         },
         insertionMode: "append",
