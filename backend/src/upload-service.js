@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 const AUTH_API_BASE_URL = "https://auth.api.zesty.io";
 const ACCOUNTS_API_BASE_URL = "https://accounts.api.zesty.io/v1";
 const DEFAULT_INSTANCE_ZUID = "8-e8e981c5f6-2twrfl";
-const DEFAULT_CONTENT_MODEL_ZUID = "6-bcf1eac59e-4xdbl3";
+const DEFAULT_DOCS_MODEL_ZUID = "6-bcf1eac59e-4xdbl3";
 
 const CATEGORY_VALUES = new Set(["Backend", "Frontend", "Mobile"]);
 
@@ -133,8 +133,10 @@ function userHasInstanceAccess(instance, instanceZuid) {
 function getConfig(userAuthorization) {
   const config = {
     bucketName: process.env.MEDIA_BUCKET_NAME,
-    contentModelZuid:
-      process.env.CONTENT_MODEL_ZUID ?? DEFAULT_CONTENT_MODEL_ZUID,
+    docsModelZuid:
+      process.env.DOCS_MODEL_ZUID ??
+      process.env.CONTENT_MODEL_ZUID ??
+      DEFAULT_DOCS_MODEL_ZUID,
     instanceZuid: process.env.ZESTY_INSTANCE_ZUID ?? DEFAULT_INSTANCE_ZUID,
     mediaDriver: process.env.MEDIA_DRIVER,
     mediaZuid: process.env.MEDIA_ZUID,
@@ -298,17 +300,51 @@ async function getCurrentUserAuthorName(userAuthorization, userZuid) {
   return authorName;
 }
 
-export async function verifyInstanceWriteAccess(authorization) {
+export async function resolveVerifiedInstanceUser(authorization) {
   const userAuthorization = getBearerAuthorization(authorization);
 
   if (!userAuthorization) {
     throw new HttpError("Sign in before continuing.", 401);
   }
 
-  await verifyUserSession(
+  const session = await verifyUserSession(
     userAuthorization,
     process.env.ZESTY_INSTANCE_ZUID ?? DEFAULT_INSTANCE_ZUID,
   );
+
+  return {
+    userAuthorization,
+    userZuid: session.userZuid,
+  };
+}
+
+export async function getCurrentInstanceUser(authorization) {
+  const { userAuthorization, userZuid } =
+    await resolveVerifiedInstanceUser(authorization);
+  const userResponse = await axios.get(
+    `${ACCOUNTS_API_BASE_URL}/users/${userZuid}`,
+    {
+      headers: {
+        Accept: "application/json",
+        Authorization: userAuthorization,
+      },
+      validateStatus: () => true,
+    },
+  );
+
+  if (userResponse.status < 200 || userResponse.status >= 300) {
+    throw new HttpError("Your Zesty user profile could not be loaded.", 502);
+  }
+
+  return {
+    user: unwrapData(userResponse.data),
+    userAuthorization,
+    userZuid,
+  };
+}
+
+export async function verifyInstanceWriteAccess(authorization) {
+  const { userAuthorization } = await resolveVerifiedInstanceUser(authorization);
 
   return userAuthorization;
 }
@@ -397,7 +433,7 @@ async function createContentItem(fields, fileZuid, config, authorName) {
   const uniqueMetaTitle = `${fields.title}-${randomUUID()}`;
 
   const response = await axios.post(
-    `https://${config.instanceZuid}.api.zesty.io/v1/content/models/${config.contentModelZuid}/items`,
+    `https://${config.instanceZuid}.api.zesty.io/v1/content/models/${config.docsModelZuid}/items`,
     {
       data: {
         category: fields.category,
@@ -416,7 +452,7 @@ async function createContentItem(fields, fileZuid, config, authorName) {
       },
       meta: {
         langID: 1,
-        contentModelZUID: config.contentModelZuid,
+        contentModelZUID: config.docsModelZuid,
       },
     },
     {

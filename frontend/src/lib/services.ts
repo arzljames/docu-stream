@@ -20,11 +20,26 @@ export {
   type DocumentSubCategory,
 } from "./services/documents";
 export {
-  generateMonthlyReleaseReport,
+  instanceUserQueryKeys,
+  listInstanceUsers,
+  type InstanceUser,
+} from "./services/instance-users";
+export {
+  approveMonthlyReleaseNote,
+  createMonthlyReleaseNote,
   getServiceErrorMessage,
   isAuthenticationError,
+  listReleaseNotes,
+  listReleaseNotesForApproval,
   postMonthlyReleaseReportToCoda,
+  releaseNoteQueryKeys,
+  type ApproveMonthlyReleaseNoteInput,
+  type CreateMonthlyReleaseNoteInput,
   type MonthlyReleaseReport,
+  type MonthlyReleaseNoteApprover,
+  type MonthlyReleaseNoteCreation,
+  type ReleaseNoteListItem,
+  type ReleaseNoteListResponse,
   type ReleaseReportCategory,
   type ReleaseReportDocument,
   type ReleaseReportSubcategory,

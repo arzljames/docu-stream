@@ -12,9 +12,11 @@ import {
   uploadMedia,
 } from "./upload-service.js";
 import {
-  generateMonthlyReleaseReport,
+  approveMonthlyReleaseNote,
+  createMonthlyReleaseNote,
   postMonthlyReleaseReportToCoda,
 } from "./report-service.js";
+import { listInstanceUsers } from "./instance-users-service.js";
 
 loadLocalEnv();
 
@@ -82,18 +84,33 @@ app.post("/api/content/items", async (req, res) => {
   }
 });
 
-app.post("/api/reports/monthly-release", async (req, res) => {
+app.get("/api/instances/users", async (req, res) => {
   try {
-    const report = await generateMonthlyReleaseReport({
+    const data = await listInstanceUsers({
       authorization: req.get("Authorization"),
-      month: req.body?.month,
     });
 
-    res.json({ data: report });
+    res.json({ data });
   } catch (error) {
-    console.error("[monthly-release-report]", getErrorMessage(error));
+    console.error("[instance-users]", getErrorMessage(error));
     res.status(error instanceof HttpError ? error.status : 502).json({
-      message: getErrorMessage(error, "Release report generation failed."),
+      message: getErrorMessage(error, "Instance users could not be loaded."),
+    });
+  }
+});
+
+app.post("/api/reports/monthly-release", async (req, res) => {
+  try {
+    const data = await createMonthlyReleaseNote({
+      authorization: req.get("Authorization"),
+      body: req.body,
+    });
+
+    res.status(201).json({ data });
+  } catch (error) {
+    console.error("[monthly-release-note]", getErrorMessage(error));
+    res.status(error instanceof HttpError ? error.status : 502).json({
+      message: getErrorMessage(error, "Release note creation failed."),
     });
   }
 });
@@ -110,6 +127,22 @@ app.post("/api/reports/monthly-release/coda", async (req, res) => {
     console.error("[monthly-release-coda]", getErrorMessage(error));
     res.status(error instanceof HttpError ? error.status : 502).json({
       message: getErrorMessage(error, "Coda release note post failed."),
+    });
+  }
+});
+
+app.patch("/api/reports/monthly-release/approve", async (req, res) => {
+  try {
+    const data = await approveMonthlyReleaseNote({
+      authorization: req.get("Authorization"),
+      body: req.body,
+    });
+
+    res.status(202).json({ data });
+  } catch (error) {
+    console.error("[monthly-release-approve]", getErrorMessage(error));
+    res.status(error instanceof HttpError ? error.status : 502).json({
+      message: getErrorMessage(error, "Release note approval failed."),
     });
   }
 });
