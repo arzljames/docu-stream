@@ -14,6 +14,7 @@ import {
 import {
   approveMonthlyReleaseNote,
   createMonthlyReleaseNote,
+  listMonthlyReleaseCodaRows,
   postMonthlyReleaseReportToCoda,
 } from "./report-service.js";
 import { listInstanceUsers } from "./instance-users-service.js";
@@ -99,6 +100,21 @@ app.get("/api/instances/users", async (req, res) => {
   }
 });
 
+app.get("/api/reports/monthly-release/source", async (req, res) => {
+  try {
+    const data = await listMonthlyReleaseCodaRows({
+      authorization: req.get("Authorization"),
+    });
+
+    res.json({ data });
+  } catch (error) {
+    console.error("[monthly-release-source]", getErrorMessage(error));
+    res.status(error instanceof HttpError ? error.status : 502).json({
+      message: getErrorMessage(error, "Coda release note source failed."),
+    });
+  }
+});
+
 app.post("/api/reports/monthly-release", async (req, res) => {
   try {
     const data = await createMonthlyReleaseNote({
@@ -120,6 +136,7 @@ app.post("/api/reports/monthly-release/coda", async (req, res) => {
     const data = await postMonthlyReleaseReportToCoda({
       authorization: req.get("Authorization"),
       month: req.body?.month,
+      sourceRows: req.body?.sourceRows,
     });
 
     res.status(202).json({ data });

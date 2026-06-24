@@ -11,29 +11,27 @@ const publicReleaseNotesClient = axios.create({
 });
 
 export type ReleaseReportDocument = {
-  category: "Backend" | "Frontend" | "Mobile";
   date: string;
-  description: string;
+  dateLabel: string;
   displayDate: string;
-  fileExtension: string;
-  fileUrl: string;
   id: string;
-  subCategory: "Media" | "Project Documentation" | "RCA_Reports";
-  subCategoryLabel: string;
+  itemId: string;
+  subcategory: string;
   title: string;
+  url: string;
 };
 
 export type ReleaseReportSubcategory = {
-  documents: ReleaseReportDocument[];
+  items: ReleaseReportDocument[];
   label: string;
-  subCategory: ReleaseReportDocument["subCategory"];
   total: number;
 };
 
 export type ReleaseReportCategory = {
-  category: ReleaseReportDocument["category"];
+  category: "projects" | "tasks";
   categoryLabel: string;
-  documents: ReleaseReportDocument[];
+  emptyMessage: string;
+  items: ReleaseReportDocument[];
   subcategories: ReleaseReportSubcategory[];
   total: number;
 };
@@ -44,7 +42,33 @@ export type MonthlyReleaseReport = {
   html: string;
   month: string;
   monthLabel: string;
-  totalDocuments: number;
+  totalItems: number;
+};
+
+export type CodaCellValue =
+  | boolean
+  | number
+  | string
+  | null
+  | CodaCellValue[]
+  | { [key: string]: CodaCellValue };
+
+export type MonthlyReleaseCodaRow = {
+  browserLink?: string;
+  href?: string;
+  id?: string;
+  name?: string;
+  values?: Record<string, CodaCellValue>;
+};
+
+export type MonthlyReleaseCodaSourceRows = {
+  generatedAt?: string;
+  projects: MonthlyReleaseCodaRow[];
+  tasks: MonthlyReleaseCodaRow[];
+};
+
+export type MonthlyReleaseCodaSource = MonthlyReleaseCodaSourceRows & {
+  generatedAt: string;
 };
 
 export type MonthlyReleaseNoteApprover = {
@@ -55,6 +79,7 @@ export type MonthlyReleaseNoteApprover = {
 export type CreateMonthlyReleaseNoteInput = {
   approver: MonthlyReleaseNoteApprover;
   month: string;
+  sourceRows: MonthlyReleaseCodaSourceRows;
 };
 
 export type MonthlyReleaseNoteCreation = {
@@ -123,8 +148,13 @@ type CodaPostResponse = {
   };
 };
 
+type MonthlyReleaseCodaSourceResponse = {
+  data: MonthlyReleaseCodaSource;
+};
+
 export const releaseNoteQueryKeys = {
   all: ["release-notes"] as const,
+  codaSource: () => [...releaseNoteQueryKeys.all, "coda-source"] as const,
   list: () => [...releaseNoteQueryKeys.all, "list"] as const,
   pending: (email: string) =>
     [...releaseNoteQueryKeys.all, "pending", email] as const,
@@ -163,6 +193,7 @@ export async function createMonthlyReleaseNote(
       approverEmail: input.approver.email,
       approverName: input.approver.name,
       month: input.month,
+      sourceRows: input.sourceRows,
     },
   );
 
@@ -204,10 +235,21 @@ export async function listReleaseNotesForApproval(email: string) {
   return response.data;
 }
 
-export async function postMonthlyReleaseReportToCoda(month: string) {
+export async function listMonthlyReleaseCodaSource() {
+  const response = await axiosInstance.get<MonthlyReleaseCodaSourceResponse>(
+    "/api/reports/monthly-release/source",
+  );
+
+  return response.data.data;
+}
+
+export async function postMonthlyReleaseReportToCoda(
+  month: string,
+  sourceRows?: MonthlyReleaseCodaSourceRows,
+) {
   const response = await axiosInstance.post<CodaPostResponse>(
     "/api/reports/monthly-release/coda",
-    { month },
+    { month, sourceRows },
   );
 
   return response.data.data;

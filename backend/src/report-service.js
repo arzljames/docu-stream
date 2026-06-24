@@ -11,18 +11,35 @@ const DEFAULT_CODA_DOC_ID = "GNetDKGq5M";
 const DEFAULT_CODA_RELEASE_NOTES_PAGE = "Release Notes";
 const DEFAULT_INSTANCE_ZUID = "8-e8e981c5f6-2twrfl";
 const DEFAULT_NOTES_MODEL_ZUID = "6-ea94cae6b2-7dskj0";
-const DOCUMENT_LIST_ENDPOINT =
-  "https://17vd2mpt-dev.webengine.zesty.io/datasets/document_list.json";
 const RELEASE_NOTES_ENDPOINT =
   "https://17vd2mpt-dev.webengine.zesty.io/datasets/release_notes.json";
-const DOCUMENT_FETCH_LIMIT = 100;
+const CODA_ROW_FETCH_LIMIT = 500;
 const RELEASE_NOTE_FETCH_LIMIT = 100;
-const CATEGORY_ORDER = [
-  { value: "Mobile", label: "📱 Mobile" },
-  { value: "Frontend", label: "🖥️ Frontend" },
-  { value: "Backend", label: "📊 Backend" },
-];
-const SUBCATEGORY_ORDER = ["Project Documentation", "RCA_Reports", "Media"];
+const CODA_RELEASE_SOURCES = {
+  projects: {
+    dateColumnId: "c-IiOXYPAoC4",
+    dateLabel: "Project ended",
+    emptyMessage: "No completed projects for this month.",
+    idColumnId: "c-MZWGOGE3S2",
+    label: "Projects",
+    statusColumnId: "c-zEJPS6RLGv",
+    subcategoryColumnId: "c-IUaciDIwiQ",
+    tableId: "grid-MfXSumoruY",
+    titleFallback: "Untitled project",
+  },
+  tasks: {
+    dateColumnId: "c-VvDTGrk0Ax",
+    dateLabel: "Date completed",
+    emptyMessage: "No completed tasks for this month.",
+    idColumnId: "c-S4TMGalGwk",
+    label: "Tasks",
+    statusColumnId: "c-lYEuP77-Zi",
+    subcategoryColumnId: "c-QDryrHPAHD",
+    tableId: "grid-i-KqDtiqCI",
+    titleFallback: "Untitled task",
+  },
+};
+const CODA_RELEASE_SOURCE_ORDER = ["projects", "tasks"];
 
 function parseReportMonth(month) {
   const match =
@@ -51,28 +68,6 @@ function parseReportMonth(month) {
   };
 }
 
-function getItemDate(item) {
-  return (
-    item?.data?.document_date_created ||
-    item?.meta?.createdAt ||
-    item?.meta?.updatedAt ||
-    ""
-  );
-}
-
-function isItemInMonth(item, monthKey) {
-  return getItemDate(item).slice(0, 7) === monthKey;
-}
-
-function getFileExtension(filePath) {
-  const cleanPath =
-    typeof filePath === "string" ? filePath.split(/[?#]/)[0] : "";
-  const fileName = cleanPath.split("/").pop() ?? "";
-  const extension = fileName.match(/\.([a-z0-9]+)$/i)?.[1];
-
-  return extension ? extension.toUpperCase() : "FILE";
-}
-
 function formatDisplayDate(value) {
   if (!value) {
     return "No date";
@@ -88,8 +83,9 @@ function formatDisplayDate(value) {
 }
 
 function parseDateValue(value) {
-  const dateOnlyMatch =
-    typeof value === "string" ? value.match(/^(\d{4})-(\d{2})-(\d{2})$/) : null;
+  const normalizedValue =
+    typeof value === "string" ? value.trim() : String(value ?? "").trim();
+  const dateOnlyMatch = normalizedValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 
   if (dateOnlyMatch) {
     const [, year, month, day] = dateOnlyMatch.map(Number);
@@ -97,11 +93,11 @@ function parseDateValue(value) {
     return new Date(year, month - 1, day);
   }
 
-  return new Date(value.replace(" ", "T"));
-}
+  const dateTimeValue = /^\d{4}-\d{2}-\d{2}\s/.test(normalizedValue)
+    ? normalizedValue.replace(" ", "T")
+    : normalizedValue;
 
-function formatSubcategory(subCategory) {
-  return subCategory === "RCA_Reports" ? "RCA / Reports" : subCategory;
+  return new Date(dateTimeValue);
 }
 
 function escapeHtml(value) {
@@ -168,22 +164,6 @@ function assertUpstreamSuccess(response, message) {
   );
 }
 
-async function fetchDocumentPage(skip) {
-  const response = await axios.get(DOCUMENT_LIST_ENDPOINT, {
-    headers: {
-      Accept: "application/json",
-    },
-    params: {
-      limit: DOCUMENT_FETCH_LIMIT,
-      skip,
-      sort_by: "date",
-      sort_order: "desc",
-    },
-  });
-
-  return response.data;
-}
-
 async function fetchReleaseNotePage(skip) {
   const response = await axios.get(RELEASE_NOTES_ENDPOINT, {
     headers: {
@@ -224,30 +204,181 @@ async function fetchAllReleaseNotes() {
   return releaseNotes;
 }
 
-async function fetchAllDocuments() {
-  const documents = [];
-  let skip = 0;
-  let totalItems = null;
+function isRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
-  for (let page = 0; page < 50; page += 1) {
-    const payload = await fetchDocumentPage(skip);
-    const items = Array.isArray(payload?.data) ? payload.data : [];
+function getCodaRowsConfig() {
+  const codaConfig = getCodaConfig();
 
-    documents.push(...items);
-    totalItems = Number(payload?._meta?.totalItems) || totalItems;
+  return {
+    docId: codaConfig.docId,
+    token: codaConfig.token,
+  };
+}
 
-    if (items.length < DOCUMENT_FETCH_LIMIT) {
-      break;
-    }
+async function fetchCodaRowsForSource(sourceKey, config = getCodaRowsConfig()) {
+  const source = CODA_RELEASE_SOURCES[sourceKey];
+  const rows = [];
+  let nextPageUrl = `${CODA_API_BASE_URL}/docs/${encodeURIComponent(
+    config.docId,
+  )}/tables/${encodeURIComponent(source.tableId)}/rows`;
+  let params = {
+    limit: CODA_ROW_FETCH_LIMIT,
+    query: `${source.statusColumnId}:"Completed"`,
+    useColumnNames: false,
+  };
 
-    skip += DOCUMENT_FETCH_LIMIT;
+  for (let page = 0; page < 50 && nextPageUrl; page += 1) {
+    const response = await axios.get(nextPageUrl, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${config.token}`,
+      },
+      params,
+      validateStatus: () => true,
+    });
 
-    if (totalItems !== null && skip >= totalItems) {
+    assertUpstreamSuccess(response, "Coda rows could not be loaded.");
+
+    const items = Array.isArray(response.data?.items)
+      ? response.data.items
+      : [];
+
+    rows.push(...items);
+    nextPageUrl =
+      typeof response.data?.nextPageLink === "string"
+        ? response.data.nextPageLink
+        : "";
+    params = undefined;
+
+    if (items.length < CODA_ROW_FETCH_LIMIT && !nextPageUrl) {
       break;
     }
   }
 
-  return documents;
+  return rows;
+}
+
+async function fetchMonthlyReleaseCodaRows() {
+  const config = getCodaRowsConfig();
+  const [projects, tasks] = await Promise.all([
+    fetchCodaRowsForSource("projects", config),
+    fetchCodaRowsForSource("tasks", config),
+  ]);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    projects,
+    tasks,
+  };
+}
+
+export async function listMonthlyReleaseCodaRows({ authorization }) {
+  await verifyInstanceWriteAccess(authorization);
+
+  return fetchMonthlyReleaseCodaRows();
+}
+
+function sanitizeCodaRows(rows) {
+  return Array.isArray(rows) ? rows.filter(isRecord) : [];
+}
+
+function getSubmittedCodaRows(sourceRows) {
+  if (!isRecord(sourceRows)) {
+    return null;
+  }
+
+  return {
+    generatedAt:
+      typeof sourceRows.generatedAt === "string"
+        ? sourceRows.generatedAt
+        : new Date().toISOString(),
+    projects: sanitizeCodaRows(sourceRows.projects),
+    tasks: sanitizeCodaRows(sourceRows.tasks),
+  };
+}
+
+async function getMonthlyReleaseCodaRows(sourceRows) {
+  return getSubmittedCodaRows(sourceRows) ?? fetchMonthlyReleaseCodaRows();
+}
+
+function getCodaRowValues(row) {
+  return isRecord(row?.values) ? row.values : {};
+}
+
+function getCodaCellText(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(getCodaCellText).filter(Boolean).join(", ");
+  }
+
+  if (!isRecord(value)) {
+    return "";
+  }
+
+  for (const key of [
+    "date",
+    "start",
+    "end",
+    "display",
+    "name",
+    "title",
+    "value",
+    "text",
+    "url",
+  ]) {
+    const text = getCodaCellText(value[key]);
+
+    if (text) {
+      return text;
+    }
+  }
+
+  return "";
+}
+
+function getMonthKeyFromDateValue(value) {
+  const text = getCodaCellText(value);
+
+  if (!text) {
+    return "";
+  }
+
+  const isoMatch = text.match(/(\d{4})-(\d{2})/);
+
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}`;
+  }
+
+  const date = parseDateValue(text);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}`;
+}
+
+function isCodaRowInMonth(row, sourceKey, monthKey) {
+  const source = CODA_RELEASE_SOURCES[sourceKey];
+  const values = getCodaRowValues(row);
+
+  return getMonthKeyFromDateValue(values[source.dateColumnId]) === monthKey;
 }
 
 async function assertReleaseNoteDoesNotExist(month) {
@@ -355,68 +486,104 @@ async function getReleaseNoteByZuid(itemZuid) {
   );
 }
 
-function normalizeDocument(item) {
-  const date = getItemDate(item);
+function getSortableDateTime(value) {
+  const date = parseDateValue(value);
+
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function normalizeCodaReleaseItem(row, sourceKey, index) {
+  const source = CODA_RELEASE_SOURCES[sourceKey];
+  const values = getCodaRowValues(row);
+  const date = getCodaCellText(values[source.dateColumnId]);
+  const itemId = getCodaCellText(values[source.idColumnId]);
+  const subcategory =
+    getCodaCellText(values[source.subcategoryColumnId]) || "Uncategorized";
+  const title = getStringField(row, ["name"]) || source.titleFallback;
+  const url = getStringField(row, ["browserLink", "href"]);
 
   return {
-    category: item.data.category,
     date,
-    description: item.data.description,
+    dateLabel: source.dateLabel,
     displayDate: formatDisplayDate(date),
-    fileExtension: getFileExtension(item.data.file),
-    fileUrl: item.data.file,
-    id: item.meta.ZUID,
-    subCategory: item.data.sub_category,
-    subCategoryLabel: formatSubcategory(item.data.sub_category),
-    title: item.data.title || "Untitled document",
+    id: getStringField(row, ["id"]) || `${sourceKey}-${index}`,
+    itemId,
+    subcategory,
+    title,
+    url,
   };
 }
 
-function groupDocuments(documents) {
-  return CATEGORY_ORDER.map((category) => {
-    const categoryDocuments = documents.filter(
-      (document) => document.category === category.value,
-    );
-    const subcategories = SUBCATEGORY_ORDER.map((subCategory) => {
-      const items = categoryDocuments.filter(
-        (document) => document.subCategory === subCategory,
+function buildCodaReleaseSubcategories(items) {
+  const groups = new Map();
+
+  for (const item of items) {
+    const key = item.subcategory.trim().toLowerCase() || "uncategorized";
+    const existing = groups.get(key);
+
+    if (existing) {
+      existing.items.push(item);
+      existing.total += 1;
+      continue;
+    }
+
+    groups.set(key, {
+      items: [item],
+      label: item.subcategory,
+      total: 1,
+    });
+  }
+
+  return Array.from(groups.values()).sort((first, second) => {
+    if (first.label === "Uncategorized") {
+      return 1;
+    }
+
+    if (second.label === "Uncategorized") {
+      return -1;
+    }
+
+    return first.label.localeCompare(second.label);
+  });
+}
+
+function buildCodaReleaseCategories(sourceRows, monthKey) {
+  return CODA_RELEASE_SOURCE_ORDER.map((sourceKey) => {
+    const source = CODA_RELEASE_SOURCES[sourceKey];
+    const items = sanitizeCodaRows(sourceRows[sourceKey])
+      .filter((row) => isCodaRowInMonth(row, sourceKey, monthKey))
+      .map((row, index) => normalizeCodaReleaseItem(row, sourceKey, index))
+      .sort(
+        (first, second) =>
+          getSortableDateTime(second.date) - getSortableDateTime(first.date),
       );
 
-      return {
-        documents: items,
-        label: formatSubcategory(subCategory),
-        subCategory,
-        total: items.length,
-      };
-    }).filter((item) => item.total > 0);
-
     return {
-      category: category.value,
-      categoryLabel: category.label,
-      documents: categoryDocuments,
-      subcategories,
-      total: categoryDocuments.length,
+      category: sourceKey,
+      categoryLabel: source.label,
+      emptyMessage: source.emptyMessage,
+      items,
+      subcategories: buildCodaReleaseSubcategories(items),
+      total: items.length,
     };
   });
 }
 
-function renderDocumentList(documents) {
-  if (documents.length === 0) {
-    return "<p>No documents uploaded for this category.</p>";
+function renderCodaReleaseItemList(items) {
+  if (items.length === 0) {
+    return "";
   }
 
-  return documents
-    .map((document) => {
-      const description = document.description
-        ? ` - ${escapeHtml(document.description)}`
-        : "";
+  return items
+    .map((item) => {
+      const title = item.url
+        ? `<a href="${escapeHtml(item.url)}">${escapeHtml(item.title)}</a>`
+        : `<strong>${escapeHtml(item.title)}</strong>`;
 
       return [
         "<li>",
-        `<a href="${escapeHtml(document.fileUrl)}">${escapeHtml(document.title)}</a>`,
-        ` <strong>${escapeHtml(document.fileExtension)}</strong>`,
-        ` <em>${escapeHtml(document.displayDate)}</em>`,
-        description,
+        title,
+        ` - <em>${escapeHtml(item.displayDate)}</em>`,
         "</li>",
       ].join("");
     })
@@ -432,50 +599,48 @@ function renderReportHtml(report) {
     .join("");
   const categorySections = report.categories
     .map((category) => {
-      const subcategorySections =
+      const itemsHtml =
         category.subcategories.length > 0
           ? category.subcategories
               .map(
                 (subcategory) => `
-                  <span style="font-weight:bold;">
-                    ${escapeHtml(subcategory.label)} (${subcategory.total})
-                  </span>
-                  <ul>${renderDocumentList(subcategory.documents)}</ul>
+                 <span style="font-weight:bold;">${escapeHtml(subcategory.label)} (${subcategory.total})</span>
+                  <ul>${renderCodaReleaseItemList(subcategory.items)}</ul>
                 `,
               )
               .join("")
-          : "<p>No documents uploaded for this category.</p>";
+          : `<p>${escapeHtml(category.emptyMessage)}</p>`;
 
       return `
         <h3>${escapeHtml(category.categoryLabel)} (${category.total})</h3>
-        ${subcategorySections}
+        ${itemsHtml}
       `;
     })
     .join("");
 
   return `
-    <hr />
     <h2>Monthly Release Notes - ${escapeHtml(report.monthLabel)}</h2>
-    <p><strong>Total documents:</strong> ${report.totalDocuments}</p>
+    <p><strong>Total completed items:</strong> ${report.totalItems}</p>
     <ul>${categorySummary}</ul>
     ${categorySections}
+    <hr />
   `;
 }
 
-async function buildMonthlyReleaseReport(month) {
+async function buildMonthlyReleaseReport(month, sourceRows) {
   const reportMonth = parseReportMonth(month);
-  const allDocuments = await fetchAllDocuments();
-  const documents = allDocuments
-    .filter((item) => isItemInMonth(item, reportMonth.key))
-    .map(normalizeDocument)
-    .sort((first, second) => second.date.localeCompare(first.date));
-  const categories = groupDocuments(documents);
+  const codaRows = await getMonthlyReleaseCodaRows(sourceRows);
+  const categories = buildCodaReleaseCategories(codaRows, reportMonth.key);
+  const totalItems = categories.reduce(
+    (total, category) => total + category.total,
+    0,
+  );
   const report = {
     categories,
     generatedAt: new Date().toISOString(),
     month: reportMonth.key,
     monthLabel: reportMonth.monthLabel,
-    totalDocuments: documents.length,
+    totalItems,
   };
 
   return {
@@ -484,10 +649,14 @@ async function buildMonthlyReleaseReport(month) {
   };
 }
 
-export async function generateMonthlyReleaseReport({ authorization, month }) {
+export async function generateMonthlyReleaseReport({
+  authorization,
+  month,
+  sourceRows,
+}) {
   await verifyInstanceWriteAccess(authorization);
 
-  return buildMonthlyReleaseReport(month);
+  return buildMonthlyReleaseReport(month, sourceRows);
 }
 
 async function createReleaseNoteItem({ fields, generatedBy, report, config }) {
@@ -563,10 +732,7 @@ async function approveReleaseNoteItem({ config, itemZuid }) {
   return response.data;
 }
 
-export async function createMonthlyReleaseNote({
-  authorization,
-  body,
-}) {
+export async function createMonthlyReleaseNote({ authorization, body }) {
   const { user, userAuthorization } =
     await getCurrentInstanceUser(authorization);
   const fields = getReleaseNoteFields(body);
@@ -582,11 +748,11 @@ export async function createMonthlyReleaseNote({
 
   await assertReleaseNoteDoesNotExist(reportMonth.key);
 
-  const report = await buildMonthlyReleaseReport(body?.month);
+  const report = await buildMonthlyReleaseReport(body?.month, body?.sourceRows);
 
-  if (report.totalDocuments === 0) {
+  if (report.totalItems === 0) {
     throw new HttpError(
-      "There are no documents to generate release notes for this month.",
+      "There are no completed Coda projects or tasks to generate release notes for this month.",
       400,
     );
   }
@@ -654,10 +820,14 @@ async function postHtmlToCoda(html, config = getCodaConfig()) {
   return response.data;
 }
 
-export async function postMonthlyReleaseReportToCoda({ authorization, month }) {
+export async function postMonthlyReleaseReportToCoda({
+  authorization,
+  month,
+  sourceRows,
+}) {
   await verifyInstanceWriteAccess(authorization);
 
-  const report = await buildMonthlyReleaseReport(month);
+  const report = await buildMonthlyReleaseReport(month, sourceRows);
   const coda = await postHtmlToCoda(report.html);
 
   return {
@@ -667,7 +837,8 @@ export async function postMonthlyReleaseReportToCoda({ authorization, month }) {
 }
 
 export async function approveMonthlyReleaseNote({ authorization, body }) {
-  const itemZuid = typeof body?.itemZuid === "string" ? body.itemZuid.trim() : "";
+  const itemZuid =
+    typeof body?.itemZuid === "string" ? body.itemZuid.trim() : "";
 
   if (!itemZuid) {
     throw new HttpError("Release note item is required.", 400);

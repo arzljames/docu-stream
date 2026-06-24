@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -37,10 +37,13 @@ import {
   getServiceErrorMessage,
   instanceUserQueryKeys,
   isAuthenticationError,
+  listMonthlyReleaseCodaSource,
   listInstanceUsers,
   listReleaseNotes,
   listReleaseNotesForApproval,
   releaseNoteQueryKeys,
+  type MonthlyReleaseCodaSource,
+  type MonthlyReleaseCodaSourceRows,
   type ReleaseNoteListItem,
 } from "@/lib/services";
 import { cn } from "@/lib/utils";
@@ -52,6 +55,9 @@ export const Route = createFileRoute("/monthly-release-notes")({
 });
 
 type ReleaseNoteFilter = "all" | "pending";
+
+const CODA_PROJECT_DATE_COLUMN_ID = "c-IiOXYPAoC4";
+const CODA_TASK_DATE_COLUMN_ID = "c-VvDTGrk0Ax";
 
 function RouteComponent() {
   const navigate = useNavigate();
@@ -93,6 +99,17 @@ function RouteComponent() {
     (item) => item.email.toLowerCase() !== currentUserEmail.toLowerCase(),
   );
   const selectedApprover = approvers.find((item) => item.id === approver);
+  const codaSourceQuery = useQuery({
+    enabled: !isAuthLoading && canRunUserAction,
+    queryFn: listMonthlyReleaseCodaSource,
+    queryKey: releaseNoteQueryKeys.codaSource(),
+  });
+  const filteredCodaRows = useMemo(
+    () => filterCodaRowsByMonth(codaSourceQuery.data, month),
+    [codaSourceQuery.data, month],
+  );
+  const filteredCodaRowCount =
+    filteredCodaRows.projects.length + filteredCodaRows.tasks.length;
   const releaseNotesQuery = useQuery({
     queryFn: listReleaseNotes,
     queryKey: releaseNoteQueryKeys.list(),
@@ -182,6 +199,11 @@ function RouteComponent() {
           releaseNotesQuery.error,
           "Release notes could not be loaded.",
         )
+    : codaSourceQuery.isError
+      ? getServiceErrorMessage(
+          codaSourceQuery.error,
+          "Completed Coda rows could not be loaded.",
+        )
     : pendingReleaseNotesQuery.isError
       ? getServiceErrorMessage(
           pendingReleaseNotesQuery.error,
@@ -210,6 +232,12 @@ function RouteComponent() {
       redirectToSignIn();
     }
   }, [approverQuery.error, approverQuery.isError, redirectToSignIn]);
+
+  useEffect(() => {
+    if (codaSourceQuery.isError && isAuthenticationError(codaSourceQuery.error)) {
+      redirectToSignIn();
+    }
+  }, [codaSourceQuery.error, codaSourceQuery.isError, redirectToSignIn]);
 
   useEffect(() => {
     if (!approver || approvers.some((item) => item.id === approver)) {
@@ -258,11 +286,39 @@ function RouteComponent() {
       return;
     }
 
+    if (codaSourceQuery.isLoading) {
+      toast({
+        description: "Wait for completed Coda rows to finish loading.",
+        title: "Still loading",
+      });
+      return;
+    }
+
+    if (codaSourceQuery.isError) {
+      toast({
+        description: getServiceErrorMessage(
+          codaSourceQuery.error,
+          "Completed Coda rows could not be loaded.",
+        ),
+        title: "Coda rows unavailable",
+      });
+      return;
+    }
+
     if (hasReleaseNoteForMonth(allReleaseNotes, month)) {
       toast({
         description:
           "This month has already been generated. Choose another month to avoid duplicates.",
         title: "Already generated",
+      });
+      return;
+    }
+
+    if (filteredCodaRowCount === 0) {
+      toast({
+        description:
+          "No completed Coda projects or tasks match the selected month.",
+        title: "Nothing to generate",
       });
       return;
     }
@@ -274,6 +330,7 @@ function RouteComponent() {
         name: selectedApprover.name,
       },
       month,
+      sourceRows: filteredCodaRows,
     });
   }
 
@@ -289,7 +346,7 @@ function RouteComponent() {
               Monthly Release Notes
             </h1>
             <p className="mt-2 text-sm text-slate-600">
-              Generate release notes from uploaded documents.
+              Generate release notes from completed Coda projects and tasks.
             </p>
           </div>
         </header>
@@ -375,7 +432,9 @@ function RouteComponent() {
             </div>
 
             <Button
-              disabled={isAuthLoading || createMutation.isPending}
+              disabled={
+                isAuthLoading || codaSourceQuery.isLoading || createMutation.isPending
+              }
               className="h-11 w-full max-w-[288px] justify-self-start rounded-lg bg-white px-4 text-sm font-semibold text-[#25166d] shadow-sm hover:bg-white/95"
               onClick={handleGenerate}
               type="button"
@@ -385,6 +444,11 @@ function RouteComponent() {
                 ? "Generating..."
                 : "Generate Monthly Release Notes"}
             </Button>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-3 text-xs font-semibold text-white/80">
+            <span>Projects: {filteredCodaRows.projects.length}</span>
+            <span>Tasks: {filteredCodaRows.tasks.length}</span>
           </div>
         </section>
 
@@ -731,6 +795,101 @@ function getGeneratedByLabel(note: ReleaseNoteListItem) {
   );
 }
 
+function filterCodaRowsByMonth(
+  source: MonthlyReleaseCodaSource | undefined,
+  month: string,
+): MonthlyReleaseCodaSourceRows {
+  return {
+    generatedAt: source?.generatedAt,
+    projects: (source?.projects ?? []).filter((row) =>
+      isCodaRowInMonth(row, CODA_PROJECT_DATE_COLUMN_ID, month),
+    ),
+    tasks: (source?.tasks ?? []).filter((row) =>
+      isCodaRowInMonth(row, CODA_TASK_DATE_COLUMN_ID, month),
+    ),
+  };
+}
+
+function isCodaRowInMonth(
+  row: MonthlyReleaseCodaSourceRows["projects"][number],
+  dateColumnId: string,
+  month: string,
+) {
+  return getMonthKeyFromCodaCell(row.values?.[dateColumnId]) === month;
+}
+
+function getMonthKeyFromCodaCell(value: unknown) {
+  const text = getCodaCellText(value);
+
+  if (!text) {
+    return "";
+  }
+
+  const isoMatch = text.match(/(\d{4})-(\d{2})/);
+
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}`;
+  }
+
+  const dateTimeValue = /^\d{4}-\d{2}-\d{2}\s/.test(text)
+    ? text.replace(" ", "T")
+    : text;
+  const date = new Date(dateTimeValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}`;
+}
+
+function getCodaCellText(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(getCodaCellText).filter(Boolean).join(", ");
+  }
+
+  if (typeof value !== "object") {
+    return "";
+  }
+
+  const record = value as Record<string, unknown>;
+
+  for (const key of [
+    "date",
+    "start",
+    "end",
+    "display",
+    "name",
+    "title",
+    "value",
+    "text",
+    "url",
+  ]) {
+    const text = getCodaCellText(record[key]);
+
+    if (text) {
+      return text;
+    }
+  }
+
+  return "";
+}
+
 function hasReleaseNoteForMonth(notes: ReleaseNoteListItem[], month: string) {
   return notes.some((note) => note.data.release_month_date.slice(0, 7) === month);
 }
@@ -738,7 +897,10 @@ function hasReleaseNoteForMonth(notes: ReleaseNoteListItem[], month: string) {
 function getGenerationErrorTitle(message: string) {
   const normalizedMessage = message.toLowerCase();
 
-  if (normalizedMessage.includes("no documents")) {
+  if (
+    normalizedMessage.includes("no documents") ||
+    normalizedMessage.includes("no completed coda")
+  ) {
     return "Nothing to generate";
   }
 
